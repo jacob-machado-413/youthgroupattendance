@@ -4,7 +4,11 @@ dist/
 *.swo
 *~
 .DS_Store
-backend/obj/
 *.db
+
 backend/YouthGroupAttendance.db
 backend/bin/
+backend/obj/
+
+tests/obj/
+tests/bin/
