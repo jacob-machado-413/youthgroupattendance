@@ -1,0 +1,10 @@
+target/
+dist/
+*.swp
+*.swo
+*~
+.DS_Store
+backend/obj/
+*.db
+backend/YouthGroupAttendance.db
+backend/bin/
