@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using YouthGroupAttendance.Api.Data;
 using YouthGroupAttendance.Api.DTOs;
+using YouthGroupAttendance.Api.Models;
 
 namespace YouthGroupAttendance.Api.Controllers;
 
@@ -16,30 +17,30 @@ public class StudentsController : ControllerBase
         _context = context;
     }
 
-    /// <summary>
-    /// Get all students with their total attendance count.
-    /// </summary>
+    private static string? GenderToString(Gender? gender) =>
+        gender?.ToString();
+
     [HttpGet]
     public async Task<ActionResult<List<StudentResponse>>> GetAllStudents()
     {
         var students = await _context.Students
-            .Select(s => new StudentResponse
-            {
-                Id = s.Id,
-                FullName = s.FullName,
-                GraduationYear = s.GraduationYear,
-                CreatedAt = s.CreatedAt,
-                TotalAttendances = s.Attendances.Count
-            })
+            .Include(s => s.Attendances)
             .OrderBy(s => s.FullName)
             .ToListAsync();
 
-        return Ok(students);
+        var result = students.Select(s => new StudentResponse
+        {
+            Id = s.Id,
+            FullName = s.FullName,
+            GraduationYear = s.GraduationYear,
+            Gender = GenderToString(s.Gender),
+            CreatedAt = s.CreatedAt,
+            TotalAttendances = s.Attendances.Count
+        }).ToList();
+
+        return Ok(result);
     }
 
-    /// <summary>
-    /// Get a specific student with their full attendance history.
-    /// </summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<StudentDetailResponse>> GetStudent(int id)
     {
@@ -48,15 +49,14 @@ public class StudentsController : ControllerBase
             .FirstOrDefaultAsync(s => s.Id == id);
 
         if (student == null)
-        {
             return NotFound($"Student with ID {id} not found.");
-        }
 
         return Ok(new StudentDetailResponse
         {
             Id = student.Id,
             FullName = student.FullName,
             GraduationYear = student.GraduationYear,
+            Gender = GenderToString(student.Gender),
             CreatedAt = student.CreatedAt,
             Attendances = student.Attendances
                 .OrderByDescending(a => a.Date)
@@ -64,36 +64,36 @@ public class StudentsController : ControllerBase
                 {
                     Id = a.Id,
                     Date = a.Date,
+                    EventType = a.EventType.ToString(),
+                    Notes = a.Notes,
                     CreatedAt = a.CreatedAt
                 })
                 .ToList()
         });
     }
 
-    /// <summary>
-    /// Search students by full name (case-insensitive).
-    /// </summary>
     [HttpGet("search")]
     public async Task<ActionResult<List<StudentResponse>>> SearchStudents([FromQuery] string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-        {
             return await GetAllStudents();
-        }
 
         var students = await _context.Students
+            .Include(s => s.Attendances)
             .Where(s => s.FullName.Contains(name))
-            .Select(s => new StudentResponse
-            {
-                Id = s.Id,
-                FullName = s.FullName,
-                GraduationYear = s.GraduationYear,
-                CreatedAt = s.CreatedAt,
-                TotalAttendances = s.Attendances.Count
-            })
             .OrderBy(s => s.FullName)
             .ToListAsync();
 
-        return Ok(students);
+        var result = students.Select(s => new StudentResponse
+        {
+            Id = s.Id,
+            FullName = s.FullName,
+            GraduationYear = s.GraduationYear,
+            Gender = GenderToString(s.Gender),
+            CreatedAt = s.CreatedAt,
+            TotalAttendances = s.Attendances.Count
+        }).ToList();
+
+        return Ok(result);
     }
 }

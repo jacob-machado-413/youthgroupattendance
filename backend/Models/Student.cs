@@ -13,6 +13,11 @@ public class Student
     [Required]
     public int GraduationYear { get; set; }
 
+    /// <summary>
+    /// Student's gender.
+    /// </summary>
+    public Gender? Gender { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation property

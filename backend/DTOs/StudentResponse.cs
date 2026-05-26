@@ -5,6 +5,7 @@ public class StudentResponse
     public int Id { get; set; }
     public string FullName { get; set; } = string.Empty;
     public int GraduationYear { get; set; }
+    public string? Gender { get; set; }
     public DateTime CreatedAt { get; set; }
     public int TotalAttendances { get; set; }
 }
@@ -14,6 +15,7 @@ public class StudentDetailResponse
     public int Id { get; set; }
     public string FullName { get; set; } = string.Empty;
     public int GraduationYear { get; set; }
+    public string? Gender { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<AttendanceRecord> Attendances { get; set; } = new();
 }
@@ -22,6 +24,8 @@ public class AttendanceRecord
 {
     public int Id { get; set; }
     public DateTime Date { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

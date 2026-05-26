@@ -223,6 +223,91 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
     }
 
     [Fact]
+    public async Task GetStudentsByDate_ReturnsOnlyStudentsWhoAttendedThatDate()
+    {
+        var today = DateTime.UtcNow.Date;
+        var yesterday = today.AddDays(-1);
+
+        // Two students attend today
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Today Student A",
+            Grade = "10th",
+            Date = today
+        });
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Today Student B",
+            Grade = "11th",
+            Date = today
+        });
+
+        // One student attends yesterday
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Yesterday Student",
+            Grade = "9th",
+            Date = yesterday
+        });
+
+        // Query for today
+        var response = await _client.GetAsync($"/api/attendance/students-by-date?date={today:yyyy-MM-dd}");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        Assert.Equal(2, students.Count);
+        Assert.Contains(students, s => s.FullName == "Today Student A");
+        Assert.Contains(students, s => s.FullName == "Today Student B");
+        Assert.DoesNotContain(students, s => s.FullName == "Yesterday Student");
+    }
+
+    [Fact]
+    public async Task GetStudentsByDate_ReturnsEachStudentOnlyOnce()
+    {
+        var today = DateTime.UtcNow.Date;
+
+        // Same student attends twice on the same date (shouldn't happen normally, but guard against it)
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Double Attendance",
+            Grade = "10th",
+            Date = today
+        });
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Double Attendance",
+            Grade = "10th",
+            Date = today
+        });
+
+        var response = await _client.GetAsync($"/api/attendance/students-by-date?date={today:yyyy-MM-dd}");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        Assert.Single(students);
+        Assert.Equal("Double Attendance", students[0].FullName);
+    }
+
+    [Fact]
+    public async Task GetStudentsByDate_DefaultsToToday()
+    {
+        var today = DateTime.UtcNow.Date;
+
+        await _client.PostAsJsonAsync("/api/attendance", new AttendanceRequest
+        {
+            FullName = "Default Date Student",
+            Grade = "10th"
+        });
+
+        // No date parameter — should default to today
+        var response = await _client.GetAsync("/api/attendance/students-by-date");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        Assert.Contains(students, s => s.FullName == "Default Date Student");
+    }
+
+    [Fact]
     public async Task GetStudentById_ReturnsStudentWithAttendanceHistory()
     {
         var createResponse = await _client.PostAsJsonAsync("/api/attendance",
@@ -353,5 +438,223 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
         Assert.False(result.IsNewStudent);
         // Graduation year should remain the original
         Assert.Equal(2028, result.GraduationYear);
+    }
+
+    // ── Event Type ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecordAttendance_DefaultsToRegularYouthGroup_WhenEventTypeNotProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Default Event", Grade = "10th" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("RegularYouthGroup", result.EventType);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresSocialGameNight_WhenSpecified()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Game Night Kid", Grade = "10th", EventType = "SocialGameNight" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("SocialGameNight", result.EventType);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresEventType_ForAllOptions()
+    {
+        var types = new[] { "RegularYouthGroup", "SocialGameNight", "ServiceProject", "RetreatCamp" };
+        foreach (var eventType in types)
+        {
+            var response = await _client.PostAsJsonAsync("/api/attendance",
+                new AttendanceRequest
+                {
+                    FullName = $"Event Type {eventType}",
+                    Grade = "10th",
+                    EventType = eventType
+                });
+            var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+            Assert.NotNull(result);
+            Assert.Equal(eventType, result.EventType);
+        }
+    }
+
+    [Fact]
+    public async Task GetAttendanceByDate_IncludesEventType()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Event Type Test", Grade = "10th", EventType = "ServiceProject" });
+
+        var response = await _client.GetAsync("/api/attendance/by-date");
+        var records = await response.Content.ReadFromJsonAsync<List<AttendanceResponse>>();
+
+        Assert.NotNull(records);
+        var record = Assert.Single(records);
+        Assert.Equal("ServiceProject", record.EventType);
+    }
+
+    [Fact]
+    public async Task StudentDetail_IncludesEventTypeInAttendanceHistory()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Detail Event", Grade = "10th", EventType = "SocialGameNight" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.GetAsync($"/api/students/{created.StudentId}");
+        var student = await response.Content.ReadFromJsonAsync<StudentDetailResponse>();
+
+        Assert.NotNull(student);
+        var attendance = Assert.Single(student.Attendances);
+        Assert.Equal("SocialGameNight", attendance.EventType);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_EventTypeIsCaseInsensitive()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Case Test", Grade = "10th", EventType = "socialgamenight" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("SocialGameNight", result.EventType);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_InvalidEventType_FallsBackToRegular()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Bad Event", Grade = "10th", EventType = "NotARealType" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("RegularYouthGroup", result.EventType);
+    }
+
+    // ── Gender ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecordAttendance_GenderIsNull_WhenNotProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "No Gender", Grade = "10th" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Null(result.Gender);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresGender_WhenProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Male Student", Grade = "10th", Gender = "Male" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("Male", result.Gender);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresGender_ForFemale()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Female Student", Grade = "10th", Gender = "Female" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("Female", result.Gender);
+    }
+
+    [Fact]
+    public async Task StudentList_IncludesGender()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Gendered Student", Grade = "10th", Gender = "Male" });
+
+        var response = await _client.GetAsync("/api/students");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        var student = Assert.Single(students);
+        Assert.Equal("Male", student.Gender);
+    }
+
+    [Fact]
+    public async Task StudentDetail_IncludesGender()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Detail Gender", Grade = "10th", Gender = "Female" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.GetAsync($"/api/students/{created.StudentId}");
+        var student = await response.Content.ReadFromJsonAsync<StudentDetailResponse>();
+
+        Assert.NotNull(student);
+        Assert.Equal("Female", student.Gender);
+    }
+
+    // ── Notes ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecordAttendance_NotesIsNull_WhenNotProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "No Notes", Grade = "10th" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Null(result.Notes);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresNotes_WhenProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest
+            {
+                FullName = "Notes Test",
+                Grade = "10th",
+                Notes = "Spring break, many students missing"
+            });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("Spring break, many students missing", result.Notes);
+    }
+
+    [Fact]
+    public async Task GetAttendanceByDate_IncludesNotes()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Notes By Date", Grade = "10th", Notes = "Game night was fun" });
+
+        var response = await _client.GetAsync("/api/attendance/by-date");
+        var records = await response.Content.ReadFromJsonAsync<List<AttendanceResponse>>();
+
+        Assert.NotNull(records);
+        var record = Assert.Single(records);
+        Assert.Equal("Game night was fun", record.Notes);
+    }
+
+    [Fact]
+    public async Task StudentDetail_IncludesNotesInAttendanceHistory()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Notes Detail", Grade = "10th", Notes = "Camp was great" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.GetAsync($"/api/students/{created.StudentId}");
+        var student = await response.Content.ReadFromJsonAsync<StudentDetailResponse>();
+
+        Assert.NotNull(student);
+        var attendance = Assert.Single(student.Attendances);
+        Assert.Equal("Camp was great", attendance.Notes);
     }
 }

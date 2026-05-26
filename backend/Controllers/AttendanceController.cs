@@ -17,39 +17,44 @@ public class AttendanceController : ControllerBase
         _context = context;
     }
 
-    /// <summary>
-    /// Convert a grade string (e.g. "10th", "10", "Grade 10") to a graduation year.
-    /// Graduation year = current year + (12 - grade level).
-    /// </summary>
     private static int GradeToGraduationYear(string grade)
     {
-        // Extract the numeric part from the grade string
         var digits = new string(grade.Where(char.IsDigit).ToArray());
-
         if (int.TryParse(digits, out var gradeLevel) && gradeLevel >= 1 && gradeLevel <= 12)
         {
             var currentYear = DateTime.UtcNow.Month >= 9
-                ? DateTime.UtcNow.Year + 1  // After September, we're in the next academic year
+                ? DateTime.UtcNow.Year + 1
                 : DateTime.UtcNow.Year;
-
             return currentYear + (12 - gradeLevel);
         }
-
-        // Fallback: assume current year + 1 (default to freshman)
         return DateTime.UtcNow.Year + 1;
     }
 
-    /// <summary>
-    /// Record attendance for a student.
-    /// If a student with the given FullName exists, a new attendance record is added for them.
-    /// If not, a new student is created first, then attendance is recorded.
-    /// </summary>
+    private static Models.EventType ParseEventType(string? eventType)
+    {
+        if (Enum.TryParse<Models.EventType>(eventType, ignoreCase: true, out var result))
+            return result;
+        return Models.EventType.RegularYouthGroup;
+    }
+
+    private static Gender? ParseGender(string? gender)
+    {
+        if (string.IsNullOrWhiteSpace(gender))
+            return null;
+        if (Enum.TryParse<Gender>(gender, ignoreCase: true, out var result))
+            return result;
+        return null;
+    }
+
+    private static string? GenderToString(Gender? gender) =>
+        gender?.ToString();
+
     [HttpPost]
     public async Task<ActionResult<AttendanceResponse>> RecordAttendance([FromBody] AttendanceRequest request)
     {
         var attendanceDate = request.Date?.Date ?? DateTime.UtcNow.Date;
+        var eventType = ParseEventType(request.EventType);
 
-        // Look up existing student by full name (case-insensitive)
         var student = await _context.Students
             .FirstOrDefaultAsync(s => s.FullName == request.FullName);
 
@@ -57,27 +62,25 @@ public class AttendanceController : ControllerBase
 
         if (student == null)
         {
-            // Create new student
             student = new Student
             {
                 FullName = request.FullName,
                 GraduationYear = GradeToGraduationYear(request.Grade),
+                Gender = ParseGender(request.Gender),
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Students.Add(student);
-
-            // Save the student first so EF generates the Id
             await _context.SaveChangesAsync();
-
             isNewStudent = true;
         }
 
-        // Record attendance
         var attendance = new Attendance
         {
             StudentId = student.Id,
             Date = attendanceDate,
+            EventType = eventType,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -90,31 +93,31 @@ public class AttendanceController : ControllerBase
             StudentId = student.Id,
             FullName = student.FullName,
             GraduationYear = student.GraduationYear,
+            Gender = GenderToString(student.Gender),
             Date = attendanceDate,
+            EventType = eventType.ToString(),
+            Notes = attendance.Notes,
             IsNewStudent = isNewStudent
         });
     }
 
-    /// <summary>
-    /// Record attendance for an existing student by their ID.
-    /// </summary>
     [HttpPost("by-student-id")]
     public async Task<ActionResult<AttendanceResponse>> RecordAttendanceByStudentId(
         [FromBody] AttendanceByStudentIdRequest request)
     {
         var student = await _context.Students.FindAsync(request.StudentId);
-
         if (student == null)
-        {
             return NotFound($"Student with ID {request.StudentId} not found.");
-        }
 
         var attendanceDate = request.Date?.Date ?? DateTime.UtcNow.Date;
+        var eventType = ParseEventType(request.EventType);
 
         var attendance = new Attendance
         {
             StudentId = student.Id,
             Date = attendanceDate,
+            EventType = eventType,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -127,14 +130,14 @@ public class AttendanceController : ControllerBase
             StudentId = student.Id,
             FullName = student.FullName,
             GraduationYear = student.GraduationYear,
+            Gender = GenderToString(student.Gender),
             Date = attendanceDate,
+            EventType = eventType.ToString(),
+            Notes = attendance.Notes,
             IsNewStudent = false
         });
     }
 
-    /// <summary>
-    /// Get attendance records for a specific date.
-    /// </summary>
     [HttpGet("by-date")]
     public async Task<ActionResult<List<AttendanceResponse>>> GetAttendanceByDate([FromQuery] DateTime? date)
     {
@@ -144,23 +147,54 @@ public class AttendanceController : ControllerBase
             .Include(a => a.Student)
             .Where(a => a.Date == queryDate)
             .OrderBy(a => a.Student.FullName)
-            .Select(a => new AttendanceResponse
-            {
-                AttendanceId = a.Id,
-                StudentId = a.StudentId,
-                FullName = a.Student.FullName,
-                GraduationYear = a.Student.GraduationYear,
-                Date = a.Date,
-                IsNewStudent = false
-            })
             .ToListAsync();
 
-        return Ok(records);
+        var result = records.Select(a => new AttendanceResponse
+        {
+            AttendanceId = a.Id,
+            StudentId = a.StudentId,
+            FullName = a.Student.FullName,
+            GraduationYear = a.Student.GraduationYear,
+            Gender = GenderToString(a.Student.Gender),
+            Date = a.Date,
+            EventType = a.EventType.ToString(),
+            Notes = a.Notes,
+            IsNewStudent = false
+        }).ToList();
+
+        return Ok(result);
     }
 
-    /// <summary>
-    /// Get attendance trends data.
-    /// </summary>
+    [HttpGet("students-by-date")]
+    public async Task<ActionResult<List<StudentResponse>>> GetStudentsByDate([FromQuery] DateTime? date)
+    {
+        var queryDate = date?.Date ?? DateTime.UtcNow.Date;
+
+        var studentIds = await _context.Attendances
+            .Where(a => a.Date == queryDate)
+            .Select(a => a.StudentId)
+            .Distinct()
+            .ToListAsync();
+
+        var students = await _context.Students
+            .Include(s => s.Attendances)
+            .Where(s => studentIds.Contains(s.Id))
+            .OrderBy(s => s.FullName)
+            .ToListAsync();
+
+        var result = students.Select(s => new StudentResponse
+        {
+            Id = s.Id,
+            FullName = s.FullName,
+            GraduationYear = s.GraduationYear,
+            Gender = GenderToString(s.Gender),
+            CreatedAt = s.CreatedAt,
+            TotalAttendances = s.Attendances.Count
+        }).OrderBy(s => s.FullName).ToList();
+
+        return Ok(result);
+    }
+
     [HttpGet("trends")]
     public async Task<ActionResult<AttendanceTrendsResponse>> GetTrends(
         [FromQuery] DateTime? from,

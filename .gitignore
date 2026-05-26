@@ -12,3 +12,5 @@ backend/obj/
 
 tests/obj/
 tests/bin/
+backend/YouthGroupAttendance.db-shm
+backend/YouthGroupAttendance.db-wal

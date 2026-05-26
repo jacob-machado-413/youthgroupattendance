@@ -33,6 +33,10 @@ public class YouthGroupContext : DbContext
             entity.Property(e => e.CreatedAt)
                   .HasDefaultValueSql("datetime('now')");
 
+            entity.Property(e => e.Gender)
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
+
             // Index on FullName for quick lookup of returning students
             entity.HasIndex(e => e.FullName);
         });
@@ -48,6 +52,14 @@ public class YouthGroupContext : DbContext
 
             entity.Property(e => e.CreatedAt)
                   .HasDefaultValueSql("datetime('now')");
+
+            entity.Property(e => e.EventType)
+                  .IsRequired()
+                  .HasConversion<string>()
+                  .HasMaxLength(50);
+
+            entity.Property(e => e.Notes)
+                  .HasMaxLength(500);
 
             entity.HasOne(e => e.Student)
                   .WithMany(s => s.Attendances)

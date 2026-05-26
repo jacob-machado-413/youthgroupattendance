@@ -55,10 +55,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     {
         try
         {
-            // Clean up the SQLite file
-            if (File.Exists(_dbPath))
+            // Delete the main SQLite file and its WAL/SHM companion files
+            foreach (var suffix in new[] { "", "-wal", "-shm" })
             {
-                File.Delete(_dbPath);
+                var path = _dbPath + suffix;
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
         }
         catch
