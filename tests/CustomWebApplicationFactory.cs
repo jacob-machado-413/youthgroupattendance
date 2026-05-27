@@ -1,15 +1,12 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using YouthGroupAttendance.Api.Data;
 
 namespace YouthGroupAttendance.Api.Tests;
 
-/// <summary>
-/// Custom WebApplicationFactory that uses a test-specific SQLite database.
-/// The database file is cleaned up after all tests in the class complete.
-/// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     private readonly string _dbPath;
@@ -23,7 +20,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     {
         builder.ConfigureServices(services =>
         {
-            // Remove the real DbContext registration
             var descriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<YouthGroupContext>));
 
@@ -32,20 +28,26 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 services.Remove(descriptor);
             }
 
-            // Add test DbContext with a unique SQLite file
             services.AddDbContext<YouthGroupContext>(options =>
             {
                 options.UseSqlite($"Data Source={_dbPath}");
             });
         });
 
-        // Use test environment so the Scalar UI / OpenAPI don't interfere
         builder.UseEnvironment("Test");
+
+        // Override the API key for tests (runs after Program.cs config)
+        builder.ConfigureAppConfiguration((context, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ApiKey"] = "test-api-key"
+            });
+        });
     }
 
     public async Task InitializeAsync()
     {
-        // Create the database
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<YouthGroupContext>();
         await context.Database.EnsureCreatedAsync();
@@ -55,20 +57,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     {
         try
         {
-            // Delete the main SQLite file and its WAL/SHM companion files
             foreach (var suffix in new[] { "", "-wal", "-shm" })
             {
                 var path = _dbPath + suffix;
                 if (File.Exists(path))
-                {
                     File.Delete(path);
-                }
             }
         }
-        catch
-        {
-            // Ignore cleanup failures
-        }
+        catch { }
 
         await base.DisposeAsync();
     }

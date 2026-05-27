@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using YouthGroupAttendance.Api.Data;
@@ -7,6 +8,7 @@ using YouthGroupAttendance.Api.Models;
 namespace YouthGroupAttendance.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class AttendanceController : ControllerBase
 {
@@ -56,7 +58,7 @@ public class AttendanceController : ControllerBase
         var eventType = ParseEventType(request.EventType);
 
         var student = await _context.Students
-            .FirstOrDefaultAsync(s => s.FullName == request.FullName);
+            .FirstOrDefaultAsync(s => EF.Functions.Like(s.FullName, request.FullName));
 
         var isNewStudent = false;
 
@@ -67,6 +69,7 @@ public class AttendanceController : ControllerBase
                 FullName = request.FullName,
                 GraduationYear = GradeToGraduationYear(request.Grade),
                 Gender = ParseGender(request.Gender),
+                School = string.IsNullOrWhiteSpace(request.School) ? null : request.School,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -94,6 +97,7 @@ public class AttendanceController : ControllerBase
             FullName = student.FullName,
             GraduationYear = student.GraduationYear,
             Gender = GenderToString(student.Gender),
+            School = student.School,
             Date = attendanceDate,
             EventType = eventType.ToString(),
             Notes = attendance.Notes,
@@ -131,6 +135,7 @@ public class AttendanceController : ControllerBase
             FullName = student.FullName,
             GraduationYear = student.GraduationYear,
             Gender = GenderToString(student.Gender),
+            School = student.School,
             Date = attendanceDate,
             EventType = eventType.ToString(),
             Notes = attendance.Notes,
@@ -156,6 +161,7 @@ public class AttendanceController : ControllerBase
             FullName = a.Student.FullName,
             GraduationYear = a.Student.GraduationYear,
             Gender = GenderToString(a.Student.Gender),
+            School = a.Student.School,
             Date = a.Date,
             EventType = a.EventType.ToString(),
             Notes = a.Notes,
@@ -188,6 +194,7 @@ public class AttendanceController : ControllerBase
             FullName = s.FullName,
             GraduationYear = s.GraduationYear,
             Gender = GenderToString(s.Gender),
+            School = s.School,
             CreatedAt = s.CreatedAt,
             TotalAttendances = s.Attendances.Count
         }).OrderBy(s => s.FullName).ToList();

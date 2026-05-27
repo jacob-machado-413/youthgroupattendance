@@ -14,6 +14,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
     public AttendanceApiTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
+        _client.DefaultRequestHeaders.Add("X-API-Key", "");
         _context = factory.Services.GetRequiredService<YouthGroupContext>();
     }
 
@@ -656,5 +657,189 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
         Assert.NotNull(student);
         var attendance = Assert.Single(student.Attendances);
         Assert.Equal("Camp was great", attendance.Notes);
+    }
+
+    // ── School ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecordAttendance_SchoolIsNull_WhenNotProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "No School", Grade = "10th" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Null(result.School);
+    }
+
+    [Fact]
+    public async Task RecordAttendance_StoresSchool_WhenProvided()
+    {
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "School Test", Grade = "10th", School = "St. Mary's High School" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal("St. Mary's High School", result.School);
+    }
+
+    [Fact]
+    public async Task StudentList_IncludesSchool()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "School List", Grade = "10th", School = "Central High" });
+
+        var response = await _client.GetAsync("/api/students");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        var student = Assert.Single(students);
+        Assert.Equal("Central High", student.School);
+    }
+
+    [Fact]
+    public async Task StudentDetail_IncludesSchool()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "School Detail", Grade = "10th", School = "Westside Academy" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.GetAsync($"/api/students/{created.StudentId}");
+        var student = await response.Content.ReadFromJsonAsync<StudentDetailResponse>();
+
+        Assert.NotNull(student);
+        Assert.Equal("Westside Academy", student.School);
+    }
+
+    // ── Merge Students ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task MergeStudents_MovesAttendancesAndDeletesSource()
+    {
+        // Create two students
+        var res1 = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Jane Doe", Grade = "10th" });
+        var student1 = await res1.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(student1);
+
+        var res2 = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Jane M. Doe", Grade = "10th" });
+        var student2 = await res2.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(student2);
+
+        // Jane Doe attends twice, Jane M. Doe attends once
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Jane Doe", Grade = "10th" });
+
+        // Merge Jane M. Doe into Jane Doe
+        var mergeResponse = await _client.PostAsJsonAsync("/api/students/merge",
+            new MergeStudentsRequest
+            {
+                SourceStudentId = student2.StudentId,
+                DestinationStudentId = student1.StudentId
+            });
+        var mergeResult = await mergeResponse.Content.ReadFromJsonAsync<MergeStudentsResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, mergeResponse.StatusCode);
+        Assert.NotNull(mergeResult);
+        Assert.Equal(1, mergeResult.AttendancesMoved);
+        Assert.Equal(student2.StudentId, mergeResult.SourceStudentId);
+        Assert.Equal("Jane M. Doe", mergeResult.SourceStudentName);
+
+        // Destination should now have 3 attendances (2 original + 1 moved)
+        Assert.Equal(3, mergeResult.MergedStudent.Attendances.Count);
+        Assert.Equal("Jane Doe", mergeResult.MergedStudent.FullName);
+
+        // Source student should be gone
+        var getSource = await _client.GetAsync($"/api/students/{student2.StudentId}");
+        Assert.Equal(HttpStatusCode.NotFound, getSource.StatusCode);
+    }
+
+    [Fact]
+    public async Task MergeStudents_ReturnsBadRequest_WhenIdsAreSame()
+    {
+        var response = await _client.PostAsJsonAsync("/api/students/merge",
+            new MergeStudentsRequest { SourceStudentId = 1, DestinationStudentId = 1 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MergeStudents_Returns404_WhenSourceNotFound()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Real Student", Grade = "10th" });
+
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Keep Me", Grade = "10th" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.PostAsJsonAsync("/api/students/merge",
+            new MergeStudentsRequest { SourceStudentId = 9999, DestinationStudentId = created.StudentId });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MergeStudents_Returns404_WhenDestinationNotFound()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Merge Source", Grade = "10th" });
+        var created = await createResponse.Content.ReadFromJsonAsync<AttendanceResponse>();
+        Assert.NotNull(created);
+
+        var response = await _client.PostAsJsonAsync("/api/students/merge",
+            new MergeStudentsRequest { SourceStudentId = created.StudentId, DestinationStudentId = 9999 });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ── Case-Insensitive Lookup ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecordAttendance_FindsExistingStudent_CaseInsensitive()
+    {
+        // Create with capitalized name
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Jane Doe", Grade = "10th" });
+
+        // Lookup with different casing
+        var response = await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "jane doe", Grade = "10th" });
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.False(result.IsNewStudent);
+        Assert.Equal("Jane Doe", result.FullName);
+    }
+
+    [Fact]
+    public async Task SearchStudents_FindsMatches_CaseInsensitive()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Alice Johnson", Grade = "10th" });
+
+        var response = await _client.GetAsync("/api/students/search?name=johnson");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        Assert.NotEmpty(students);
+        Assert.Contains(students, s => s.FullName == "Alice Johnson");
+    }
+
+    [Fact]
+    public async Task SearchStudents_FindsMatches_WithMixedCase()
+    {
+        await _client.PostAsJsonAsync("/api/attendance",
+            new AttendanceRequest { FullName = "Bob Smith", Grade = "10th" });
+
+        var response = await _client.GetAsync("/api/students/search?name=BOB");
+        var students = await response.Content.ReadFromJsonAsync<List<StudentResponse>>();
+
+        Assert.NotNull(students);
+        Assert.NotEmpty(students);
+        Assert.Contains(students, s => s.FullName == "Bob Smith");
     }
 }

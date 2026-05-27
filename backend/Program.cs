@@ -1,12 +1,26 @@
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using YouthGroupAttendance.Api.Authentication;
 using YouthGroupAttendance.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Load local secrets (not tracked by git)
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+
+// Configure API key authentication
+builder.Services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
+    .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationOptions.DefaultScheme, options =>
+        {
+            options.ApiKey = builder.Configuration["ApiKey"] ?? "changeme";
+        });
+
+builder.Services.AddAuthorization();
 
 // Configure Entity Framework with SQLite
 var connectionString = builder.Configuration.GetConnectionString("YouthGroupDb");
@@ -41,16 +55,18 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference(options =>
     {
         options.WithTitle("Youth Group Attendance API")
-               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+               .WithPreferredScheme("ApiKey")
+               .WithApiKeyAuthentication(x => { x.Token = builder.Configuration["ApiKey"] ?? "changeme"; });
     });
 }
 
 app.UseCors("AllowFrontend");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
 // Delete the database when the host fully shuts down (e.g. Ctrl+C).
-// EnsureCreated() will recreate it fresh on the next startup.
 var dbPath = ParseSqliteDataSource(connectionString);
 if (dbPath != null && app.Environment.IsDevelopment())
 {
@@ -64,13 +80,10 @@ if (dbPath != null && app.Environment.IsDevelopment())
 
 app.Run();
 
-/// <summary>
-/// Deletes a SQLite database file along with its WAL (-wal) and SHM (-shm) companion files.
-/// </summary>
-static void DeleteSqliteDatabase(string dbPath, bool isDevelopment = false)
+static void DeleteSqliteDatabase(string dbPath, bool isDevelopment)
 {
     if (!isDevelopment) return;
-    
+
     foreach (var suffix in new[] { "", "-wal", "-shm" })
     {
         var path = dbPath + suffix;
@@ -81,9 +94,6 @@ static void DeleteSqliteDatabase(string dbPath, bool isDevelopment = false)
     }
 }
 
-/// <summary>
-/// Parses the data source path from a SQLite connection string like "Data Source=path/to/db.db".
-/// </summary>
 static string? ParseSqliteDataSource(string? connStr)
 {
     if (connStr == null) return null;

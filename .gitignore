@@ -14,3 +14,8 @@ tests/obj/
 tests/bin/
 backend/YouthGroupAttendance.db-shm
 backend/YouthGroupAttendance.db-wal
+
+# Local secrets (API keys, etc.)
+appsettings.Local.json
+backend/appsettings.Local.json
+**/appsettings.Local.json

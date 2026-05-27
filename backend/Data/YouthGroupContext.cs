@@ -37,6 +37,9 @@ public class YouthGroupContext : DbContext
                   .HasConversion<string>()
                   .HasMaxLength(20);
 
+            entity.Property(e => e.School)
+                  .HasMaxLength(100);
+
             // Index on FullName for quick lookup of returning students
             entity.HasIndex(e => e.FullName);
         });

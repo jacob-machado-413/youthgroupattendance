@@ -6,6 +6,7 @@ public class StudentResponse
     public string FullName { get; set; } = string.Empty;
     public int GraduationYear { get; set; }
     public string? Gender { get; set; }
+    public string? School { get; set; }
     public DateTime CreatedAt { get; set; }
     public int TotalAttendances { get; set; }
 }
@@ -16,8 +17,23 @@ public class StudentDetailResponse
     public string FullName { get; set; } = string.Empty;
     public int GraduationYear { get; set; }
     public string? Gender { get; set; }
+    public string? School { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<AttendanceRecord> Attendances { get; set; } = new();
+}
+
+public class MergeStudentsRequest
+{
+    public int SourceStudentId { get; set; }
+    public int DestinationStudentId { get; set; }
+}
+
+public class MergeStudentsResponse
+{
+    public StudentDetailResponse MergedStudent { get; set; } = null!;
+    public int AttendancesMoved { get; set; }
+    public int SourceStudentId { get; set; }
+    public string SourceStudentName { get; set; } = string.Empty;
 }
 
 public class AttendanceRecord

@@ -18,6 +18,12 @@ public class Student
     /// </summary>
     public Gender? Gender { get; set; }
 
+    /// <summary>
+    /// The school the student attends.
+    /// </summary>
+    [MaxLength(100)]
+    public string? School { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation property
