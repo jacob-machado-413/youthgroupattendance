@@ -47,6 +47,13 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
+// Serve static frontend files in all non-dev environments
+if (!app.Environment.IsDevelopment())
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
 if (app.Environment.IsDevelopment())
 {
     Console.WriteLine("Development environment detected.");
@@ -58,20 +65,13 @@ if (app.Environment.IsDevelopment())
                .AddPreferredSecuritySchemes("ApiKey");
     });
 }
-else
-{
-    app.UseDefaultFiles();
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        ContentTypeProvider = GetBlazorContentTypeProvider()
-    });
-}
 
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// SPA fallback: must come after controllers so /api/* routes take priority
 if (!app.Environment.IsDevelopment())
 {
     app.MapFallbackToFile("index.html");
@@ -105,7 +105,14 @@ static FileExtensionContentTypeProvider GetBlazorContentTypeProvider()
     var provider = new FileExtensionContentTypeProvider();
     provider.Mappings[".wasm"] = "application/wasm";
     provider.Mappings[".blat"] = "application/octet-stream";
+    provider.Mappings[".dll"] = "application/octet-stream";
     provider.Mappings[".pdb"] = "application/octet-stream";
+    provider.Mappings[".json"] = "application/json";
+    provider.Mappings[".js"] = "application/javascript";
+    provider.Mappings[".css"] = "text/css";
+    provider.Mappings[".png"] = "image/png";
+    provider.Mappings[".svg"] = "image/svg+xml";
+    provider.Mappings[".ico"] = "image/x-icon";
     return provider;
 }
 
