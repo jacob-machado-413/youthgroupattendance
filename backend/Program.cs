@@ -5,8 +5,11 @@ using YouthGroupAttendance.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Load local secrets (not tracked by git)
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+// Load local secrets (not tracked by git) — skipped in Test environment
+if (!builder.Environment.IsEnvironment("Test"))
+{
+    builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+}
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -17,7 +20,9 @@ builder.Services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
     .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
         ApiKeyAuthenticationOptions.DefaultScheme, options =>
         {
-            options.ApiKey = builder.Configuration["ApiKey"] ?? "changeme";
+            options.ApiKey = builder.Configuration["ApiKey"]
+                          ?? Environment.GetEnvironmentVariable("YOUTH_GROUP_API_KEY")
+                          ?? "changeme";
         });
 
 builder.Services.AddAuthorization();
@@ -32,7 +37,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://localhost:5001", "http://localhost:5000")
+        policy.WithOrigins("https://localhost:5001", "http://localhost:5000", "http://localhost:5091")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -56,8 +61,7 @@ if (app.Environment.IsDevelopment())
     {
         options.WithTitle("Youth Group Attendance API")
                .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
-               .WithPreferredScheme("ApiKey")
-               .WithApiKeyAuthentication(x => { x.Token = builder.Configuration["ApiKey"] ?? "changeme"; });
+               .AddPreferredSecuritySchemes("ApiKey");
     });
 }
 

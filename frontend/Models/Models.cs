@@ -1,4 +1,29 @@
-namespace YouthGroupAttendance.Api.DTOs;
+namespace YouthGroupAttendance.Frontend.Models;
+
+public class AttendanceRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string Grade { get; set; } = string.Empty;
+    public string? EventType { get; set; }
+    public string? Gender { get; set; }
+    public string? School { get; set; }
+    public DateTime? Date { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class AttendanceResponse
+{
+    public int AttendanceId { get; set; }
+    public int StudentId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public int GraduationYear { get; set; }
+    public string? Gender { get; set; }
+    public string? School { get; set; }
+    public DateTime Date { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+    public bool IsNewStudent { get; set; }
+}
 
 public class StudentResponse
 {
@@ -20,6 +45,15 @@ public class StudentDetailResponse
     public string? School { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<AttendanceRecord> Attendances { get; set; } = new();
+}
+
+public class AttendanceRecord
+{
+    public int Id { get; set; }
+    public DateTime Date { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class InactiveStudentResponse
@@ -47,15 +81,6 @@ public class MergeStudentsResponse
     public int AttendancesMoved { get; set; }
     public int SourceStudentId { get; set; }
     public string SourceStudentName { get; set; } = string.Empty;
-}
-
-public class AttendanceRecord
-{
-    public int Id { get; set; }
-    public DateTime Date { get; set; }
-    public string EventType { get; set; } = string.Empty;
-    public string? Notes { get; set; }
-    public DateTime CreatedAt { get; set; }
 }
 
 public class AttendanceTrendsResponse

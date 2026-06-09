@@ -1,0 +1,62 @@
+@page "/trends"
+@inject ApiService Api
+
+<h2>Trends</h2>
+
+<button @onclick="@LoadTrends" disabled="@_loading">@(_loading ? "Loading..." : "Refresh")</button>
+
+@if (_trends != null)
+{
+    <div>
+        <p><strong>Total Students:</strong> @_trends.TotalStudents</p>
+        <p><strong>Total Attendances:</strong> @_trends.TotalAttendances</p>
+    </div>
+
+    <h3>Attendance by Date</h3>
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Count</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var d in _trends.AttendanceByDate)
+            {
+                <tr><td>@d.Date.ToShortDateString()</td><td>@d.Count</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>By Graduation Year</h3>
+    <table>
+        <thead>
+            <tr><th>Grad Year</th><th>Students</th><th>Attendances</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var g in _trends.GradeBreakdown)
+            {
+                <tr><td>@g.GraduationYear</td><td>@g.StudentCount</td><td>@g.AttendanceCount</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <p class="error">@_error</p>
+}
+
+@code {
+    private AttendanceTrendsResponse? _trends;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadTrends();
+
+    private async Task LoadTrends()
+    {
+        _loading = true;
+        _error = null;
+        try { _trends = await Api.GetTrendsAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

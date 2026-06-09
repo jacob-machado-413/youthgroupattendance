@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using YouthGroupAttendance.Api.Data;
 using YouthGroupAttendance.Api.DTOs;
 using YouthGroupAttendance.Api.Models;
+using System.Text;
 
 namespace YouthGroupAttendance.Api.Controllers;
 
@@ -246,5 +247,47 @@ public class AttendanceController : ControllerBase
             AttendanceByDate = attendanceByDate,
             GradeBreakdown = gradeBreakdown
         });
+    }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportAttendance([FromQuery] DateTime? date)
+    {
+        var queryDate = date?.Date ?? DateTime.UtcNow.Date;
+
+        var records = await _context.Attendances
+            .Include(a => a.Student)
+            .Where(a => a.Date == queryDate)
+            .OrderBy(a => a.Student.FullName)
+            .ToListAsync();
+
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("Id,StudentId,FullName,GraduationYear,Grade,Date,EventType,Notes,CreatedAt");
+
+        foreach (var a in records)
+        {
+            var grade = GraduationYearToGrade(a.Student.GraduationYear);
+            var notes = a.Notes ?? "";
+            csv.AppendLine($"{a.Id},{a.StudentId},\"{a.Student.FullName}\",{a.Student.GraduationYear},{grade},{a.Date:yyyy-MM-dd},{a.EventType},{notes},{a.CreatedAt:yyyy-MM-dd}");
+        }
+
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", $"attendance-{queryDate:yyyy-MM-dd}.csv");
+    }
+
+    private static string GraduationYearToGrade(int graduationYear)
+    {
+        var now = DateTime.UtcNow;
+        var academicYear = now.Month >= 9 ? now.Year + 1 : now.Year;
+        var gradeLevel = 12 - (graduationYear - academicYear);
+        return gradeLevel switch
+        {
+            6 => "6th",
+            7 => "7th",
+            8 => "8th",
+            9 => "9th",
+            10 => "10th",
+            11 => "11th",
+            12 => "12th",
+            _ => $"{gradeLevel}th"
+        };
     }
 }

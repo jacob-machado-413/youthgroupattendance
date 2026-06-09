@@ -14,7 +14,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
     public AttendanceApiTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
-        _client.DefaultRequestHeaders.Add("X-API-Key", "");
+        _client.DefaultRequestHeaders.Add("X-API-Key", "test-api-key");
         _context = factory.Services.GetRequiredService<YouthGroupContext>();
     }
 

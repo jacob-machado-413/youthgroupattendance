@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Youth Group Attendance</title>
+        <base href="/" />
+        <link rel="preload" id="webassembly" />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+        />
+        <link rel="stylesheet" href="css/app.css" />
+        <link rel="icon" type="image/png" href="favicon.png" />
+        <link
+            href="YouthGroupAttendance.Frontend.styles.css"
+            rel="stylesheet"
+        />
+        <script type="importmap"></script>
+        <style>
+            body {
+                padding: 1rem;
+            }
+            article {
+                padding: 1rem;
+            }
+            table {
+                font-size: 0.9rem;
+            }
+            th,
+            td {
+                padding: 0.4rem 0.5rem !important;
+            }
+            nav a {
+                padding: 0.3rem 0.5rem !important;
+            }
+            .login-page {
+                max-width: 400px;
+                margin: 4rem auto;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <svg class="loading-progress">
+                <circle r="40%" cx="50%" cy="50%" />
+                <circle r="40%" cx="50%" cy="50%" />
+            </svg>
+            <div class="loading-progress-text"></div>
+        </div>
+        <div id="blazor-error-ui">
+            An unhandled error has occurred.
+            <a href="." class="reload">Reload</a>
+            <span class="dismiss">🗙</span>
+        </div>
+        <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+        <script>
+            window.downloadFile = function (fileName, content) {
+                const blob = new Blob([content], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+        </script>
+    </body>
+</html>

@@ -1,0 +1,81 @@
+@page "/outreach"
+@inject ApiService Api
+@inject NavigationManager Nav
+
+<h2>Outreach — Students Falling Through the Cracks</h2>
+
+<div class="outreach-controls">
+    <label>Show students who haven't attended in
+        <select @bind="_weeks" @bind:after="LoadInactive">
+            <option value="1">1 week</option>
+            <option value="2">2 weeks</option>
+            <option value="3">3 weeks</option>
+            <option value="4">4 weeks</option>
+            <option value="6">6 weeks</option>
+            <option value="8">8 weeks</option>
+            <option value="12">12 weeks</option>
+        </select>
+    </label>
+    <button @onclick="LoadInactive" disabled="@_loading">@(_loading ? "Loading..." : "Refresh")</button>
+</div>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_students.Count == 0)
+{
+    <p class="text-ok">All students have attended within the selected window.</p>
+}
+else
+{
+    <p class="outreach-count">@_students.Count student(s) need attention</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Grade</th>
+                <th>Last Attendance</th>
+                <th>Days Ago</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _students)
+            {
+                <tr class="@(s.DaysSinceLastAttendance > 30 ? "row-critical" : s.DaysSinceLastAttendance > 14 ? "row-warning" : "")"
+                    @onclick="@(() => Nav.NavigateTo($"/students/{s.Id}"))" style="cursor:pointer;">
+                    <td><strong>@s.FullName</strong></td>
+                    <td>@GradeHelper.GraduationYearToGrade(s.GraduationYear)</td>
+                    <td>@(s.NeverAttended ? "Never attended" : s.LastAttendanceDate?.ToShortDateString())</td>
+                    <td>@(s.NeverAttended ? "—" : $"{s.DaysSinceLastAttendance} days")</td>
+                    <td>@s.TotalAttendances</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<style>
+    .outreach-controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .outreach-count { font-weight: bold; margin-bottom: 0.5rem; }
+    .row-warning { background: #fff8e1; }
+    .row-critical { background: #ffe6e6; font-weight: bold; }
+</style>
+
+@code {
+    private int _weeks = 3;
+    private bool _loading;
+    private List<InactiveStudentResponse> _students = new();
+
+    protected override async Task OnInitializedAsync() => await LoadInactive();
+
+    private async Task LoadInactive()
+    {
+        _loading = true;
+        try { _students = await Api.GetInactiveStudentsAsync(_weeks); }
+        catch { }
+        finally { _loading = false; }
+    }
+}

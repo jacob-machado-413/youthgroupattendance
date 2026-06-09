@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using YouthGroupAttendance.Api.Data;
 
@@ -18,32 +17,22 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Set the API key via environment variable for tests (always takes priority)
+        Environment.SetEnvironmentVariable("YOUTH_GROUP_API_KEY", "test-api-key");
+
         builder.ConfigureServices(services =>
         {
             var descriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<YouthGroupContext>));
 
             if (descriptor != null)
-            {
                 services.Remove(descriptor);
-            }
 
             services.AddDbContext<YouthGroupContext>(options =>
-            {
-                options.UseSqlite($"Data Source={_dbPath}");
-            });
+                options.UseSqlite($"Data Source={_dbPath}"));
         });
 
         builder.UseEnvironment("Test");
-
-        // Override the API key for tests (runs after Program.cs config)
-        builder.ConfigureAppConfiguration((context, config) =>
-        {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ApiKey"] = "test-api-key"
-            });
-        });
     }
 
     public async Task InitializeAsync()

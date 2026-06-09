@@ -6,6 +6,12 @@ dist/
 .DS_Store
 *.db
 
+bin/
+obj/
+
+frontend/bin/
+frontend/obj/
+
 backend/YouthGroupAttendance.db
 backend/bin/
 backend/obj/

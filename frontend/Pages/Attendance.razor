@@ -1,0 +1,311 @@
+@page "/attendance"
+@inject ApiService Api
+
+<h2>Record Attendance</h2>
+
+@* ── Event details ── *@
+<div class="event-bar">
+    <label>Date: <InputDate @bind-Value="_date" /></label>
+    <label>Event:
+        <select @bind="_eventType">
+            <option value="RegularYouthGroup">Regular Youth Group</option>
+            <option value="SocialGameNight">Social / Game Night</option>
+            <option value="ServiceProject">Service Project</option>
+            <option value="RetreatCamp">Retreat / Camp</option>
+        </select>
+    </label>
+    <label>Notes: <input @bind="_notes" placeholder="e.g. spring break" /></label>
+</div>
+
+@if (!_loaded)
+{
+    <p>Loading students...</p>
+}
+else
+{
+    @* ── Returning students checklist ── *@
+    <div class="section-card">
+        <h3>Returning Students</h3>
+        <input class="filter-input" @bind="_filter" @bind:event="oninput" placeholder="Filter by name..." />
+
+        @foreach (var group in FilteredGroups)
+        {
+            <div class="grade-group">
+                <div class="grade-header" @onclick="@(() => group.Expanded = !group.Expanded)">
+                    <span class="grade-toggle">@(group.Expanded ? "▼" : "▶")</span>
+                    <span class="grade-label">@group.GradeName</span>
+                    <span class="grade-count">@group.CheckedCount / @group.VisibleCount checked</span>
+                </div>
+                @if (group.Expanded)
+                {
+                    <div class="grade-students">
+                        @foreach (var s in group.Students.Where(x => !x.Hidden))
+                        {
+                            <label class="student-check @(s.Checked ? "checked" : "")">
+                                <input type="checkbox" @bind="s.Checked" />
+                                <span class="check-name">@s.FullName</span>
+                                <span class="check-gender">@(s.Gender ?? "")</span>
+                                <span class="check-school">@(s.School ?? "")</span>
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="checklist-footer">
+            <label><input type="checkbox" @bind="_selectAll" @bind:after="ToggleAll" /> Select all</label>
+        </div>
+    </div>
+
+    @* ── New students ── *@
+    <div class="section-card">
+        <h3>New Students</h3>
+        <div class="new-grid">
+            <div class="new-header">
+                <span>Name</span><span>Grade</span><span></span>
+            </div>
+            @for (int i = 0; i < _newRows.Count; i++)
+            {
+                var idx = i;
+                var r = _newRows[idx];
+                <div class="new-row">
+                    <input @bind="r.FullName" @bind:event="oninput" placeholder="Full name" />
+                    <select @bind="r.Grade">
+                        <option value="">Grade</option>
+                        @foreach (var g in GradeHelper.GradeOptions) { <option value="@g">@g</option> }
+                    </select>
+                    <button class="btn-remove-sm" @onclick="@(() => _newRows.RemoveAt(idx))" title="Remove">✕</button>
+                </div>
+            }
+            <button class="btn-add-row" @onclick="@(() => _newRows.Add(new NewRow()))">+ Add another</button>
+        </div>
+    </div>
+
+    @* ── Submit & Summary ── *@
+    <button class="btn-submit" @onclick="SubmitAll" disabled="@_submitting">
+        @if (_submitting)
+        {
+            <span>Submitting... @_submittedCount / @_totalToSubmit</span>
+        }
+        else
+        {
+            var total = _grouped.Sum(g => g.CheckedCount) + _newRows.Count(r => !string.IsNullOrWhiteSpace(r.FullName));
+            <span>Record Attendance (@total students)</span>
+        }
+    </button>
+
+    @if (_summary.Count > 0)
+    {
+        <div class="summary">
+            <h4>Results</h4>
+            <p>@_summary.Count(s => s.Success) recorded | @_summary.Count(s => !s.Success) failed</p>
+            <ul>
+                @foreach (var s in _summary)
+                {
+                    <li class="@(s.Success ? "text-ok" : "text-err")">@s.Name — @(s.Success ? (s.IsNew ? "New" : "OK") : s.Error)</li>
+                }
+            </ul>
+        </div>
+    }
+}
+
+<style>
+    .event-bar { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+    .section-card { border: 1px solid #ccc; border-radius: 6px; padding: 0.5rem 0.8rem; margin-bottom: 1rem; background: #fafafa; }
+    .grade-group { border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.3rem; overflow: hidden; }
+    .grade-header { display: flex; gap: 0.5rem; align-items: center; padding: 0.4rem 0.5rem; background: #eee; cursor: pointer; user-select: none; }
+    .grade-toggle { width: 1rem; }
+    .grade-students { padding: 0.2rem 0; }
+    .student-check { display: flex; gap: 0.5rem; align-items: center; padding: 0.3rem 0.5rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+    .student-check:last-child { border-bottom: none; }
+    .student-check:hover { background: #e0f0ff; }
+    .student-check.checked { background: #e6ffe6; }
+    .student-check input { margin: 0; }
+    .check-name { flex: 1; }
+    .check-gender { width: 3rem; color: #666; font-size: 0.9rem; }
+    .check-school { width: 8rem; color: #666; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .checklist-footer { padding: 0.4rem 0.5rem 0 0.5rem; font-size: 0.9rem; }
+    .new-grid { display: flex; flex-direction: column; gap: 0.3rem; }
+    .new-header { display: flex; gap: 0.3rem; font-weight: bold; font-size: 0.85rem; padding: 0 0.2rem; }
+    .new-header span:first-child { flex: 1; }
+    .new-header span:nth-child(2) { width: 6rem; }
+    .new-row { display: flex; gap: 0.3rem; align-items: center; }
+    .btn-remove-sm { background: none; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; padding: 0.2rem 0.4rem; }
+    .btn-add-row { background: none; border: 1px dashed #aaa; border-radius: 4px; cursor: pointer; padding: 0.3rem; margin-top: 0.3rem; color: #555; }
+    .btn-add-row:hover { border-color: #4a90d9; color: #4a90d9; }
+</style>
+
+@code {
+    private DateTime _date = DateTime.Today;
+    private string _eventType = "RegularYouthGroup";
+    private string _notes = "";
+    private bool _loaded;
+    private bool _submitting;
+    private string _filter = "";
+    private bool _selectAll;
+    private List<GradeGroup> _grouped = new();
+    private List<NewRow> _newRows = new() { new() };
+    private List<SummaryItem> _summary = new();
+    private int _submittedCount;
+    private int _totalToSubmit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var students = await Api.GetAllStudentsAsync();
+            _grouped = students
+                .GroupBy(s => GradeHelper.GraduationYearToGrade(s.GraduationYear))
+                .OrderBy(g => g.Key switch
+                {
+                    "6th" => 6, "7th" => 7, "8th" => 8, "9th" => 9,
+                    "10th" => 10, "11th" => 11, "12th" => 12, _ => 99
+                })
+                .Select(g => new GradeGroup
+                {
+                    GradeName = g.Key,
+                    Students = g.Select(s => new CheckableStudent
+                    {
+                        Id = s.Id, FullName = s.FullName,
+                        Gender = s.Gender, School = s.School,
+                        GraduationYear = s.GraduationYear
+                    }).OrderBy(s => s.FullName).ToList()
+                })
+                .ToList();
+        }
+        catch { }
+        _loaded = true;
+    }
+
+    private void ToggleAll()
+    {
+        foreach (var group in _grouped)
+        {
+            foreach (var s in group.Students)
+            {
+                if (!s.Hidden)
+                    s.Checked = _selectAll;
+            }
+        }
+    }
+
+    private IEnumerable<GradeGroup> FilteredGroups
+    {
+        get
+        {
+            foreach (var group in _grouped)
+            {
+                foreach (var s in group.Students)
+                    s.Hidden = !string.IsNullOrWhiteSpace(_filter) &&
+                               !s.FullName.Contains(_filter, StringComparison.OrdinalIgnoreCase);
+                yield return group;
+            }
+        }
+    }
+
+    private async Task SubmitAll()
+    {
+        _submitting = true;
+        _submittedCount = 0;
+        _summary.Clear();
+
+        var checkedStudents = _grouped.SelectMany(g => g.Students)
+            .Where(s => s.Checked).ToList();
+        var newStudents = _newRows.Where(r => !string.IsNullOrWhiteSpace(r.FullName)).ToList();
+        _totalToSubmit = checkedStudents.Count + newStudents.Count;
+
+        foreach (var s in checkedStudents)
+        {
+            try
+            {
+                var result = await Api.RecordAttendanceAsync(new AttendanceRequest
+                {
+                    FullName = s.FullName.Trim(),
+                    Grade = GradeHelper.GraduationYearToGrade(s.GraduationYear),
+                    Date = _date,
+                    EventType = _eventType,
+                    Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim()
+                });
+                _submittedCount++;
+                if (result != null)
+                {
+                    s.Checked = false;
+                    _summary.Add(new SummaryItem
+                    {
+                        Name = s.FullName, Success = true, IsNew = result.IsNewStudent
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _summary.Add(new SummaryItem { Name = s.FullName, Success = false, Error = ex.Message });
+            }
+        }
+
+        foreach (var r in newStudents)
+        {
+            try
+            {
+                var result = await Api.RecordAttendanceAsync(new AttendanceRequest
+                {
+                    FullName = r.FullName.Trim(),
+                    Grade = r.Grade,
+                    Date = _date,
+                    EventType = _eventType,
+                    Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim()
+                });
+                _submittedCount++;
+                if (result != null)
+                {
+                    _summary.Add(new SummaryItem
+                    {
+                        Name = r.FullName, Success = true, IsNew = result.IsNewStudent
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _summary.Add(new SummaryItem { Name = r.FullName, Success = false, Error = ex.Message });
+            }
+        }
+
+        _newRows = new() { new() };
+        _selectAll = false;
+        _submitting = false;
+    }
+
+    private class GradeGroup
+    {
+        public string GradeName { get; set; } = "";
+        public List<CheckableStudent> Students { get; set; } = new();
+        public bool Expanded { get; set; } = true;
+        public int CheckedCount => Students.Count(s => s.Checked && !s.Hidden);
+        public int VisibleCount => Students.Count(s => !s.Hidden);
+    }
+
+    private class CheckableStudent
+    {
+        public int Id { get; set; }
+        public string FullName { get; set; } = "";
+        public string? Gender { get; set; }
+        public string? School { get; set; }
+        public int GraduationYear { get; set; }
+        public bool Checked { get; set; }
+        public bool Hidden { get; set; }
+    }
+
+    private class NewRow
+    {
+        public string FullName { get; set; } = "";
+        public string Grade { get; set; } = "";
+    }
+
+    private class SummaryItem
+    {
+        public string Name { get; set; } = "";
+        public bool Success { get; set; }
+        public bool IsNew { get; set; }
+        public string? Error { get; set; }
+    }
+}

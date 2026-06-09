@@ -1,0 +1,33 @@
+﻿@inherits LayoutComponentBase
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+@if (_showLayout)
+{
+    <div class="layout">
+        <aside class="sidebar">
+            <NavMenu />
+        </aside>
+        <main class="main-content">
+            @Body
+        </main>
+    </div>
+}
+
+@code {
+    private bool _showLayout;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.TryLoadKeyAsync();
+
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", replace: true);
+        }
+        else
+        {
+            _showLayout = true;
+        }
+    }
+}

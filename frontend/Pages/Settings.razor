@@ -1,0 +1,166 @@
+@page "/settings"
+@inject ApiService Api
+@inject NavigationManager Nav
+
+<h2>Settings</h2>
+
+<h3>Merge Duplicate Students</h3>
+<p>If a student was accidentally added twice, combine their attendance records. The source student will be deleted.</p>
+
+<div class="merge-layout">
+    <div class="merge-side">
+        <h4>Source (will be deleted)</h4>
+        <input @bind="_sourceSearch" @bind:event="oninput"
+               @onkeyup="@(() => SearchSource())"
+               placeholder="Search for student..." />
+        @if (_sourceResults.Count > 0)
+        {
+            <div class="merge-results">
+                @foreach (var s in _sourceResults)
+                {
+                    <div class="merge-result-item @(s.Id == _sourceId ? "selected" : "")"
+                         @onclick="@(() => SelectSource(s))">
+                        <strong>@s.FullName</strong>
+                        <span>@GradeHelper.GraduationYearToGrade(s.GraduationYear) | @s.Gender | @s.School</span>
+                        <span class="badge">@s.TotalAttendances attendances</span>
+                    </div>
+                }
+            </div>
+        }
+        @if (_sourceId.HasValue)
+        {
+            <p class="selected-label">Selected: <strong>@_sourceName</strong></p>
+        }
+    </div>
+
+    <div class="merge-arrow">→</div>
+
+    <div class="merge-side">
+        <h4>Destination (will be kept)</h4>
+        <input @bind="_destSearch" @bind:event="oninput"
+               @onkeyup="@(() => SearchDest())"
+               placeholder="Search for student..." />
+        @if (_destResults.Count > 0)
+        {
+            <div class="merge-results">
+                @foreach (var s in _destResults)
+                {
+                    <div class="merge-result-item @(s.Id == _destId ? "selected" : "")"
+                         @onclick="@(() => SelectDest(s))">
+                        <strong>@s.FullName</strong>
+                        <span>@GradeHelper.GraduationYearToGrade(s.GraduationYear) | @s.Gender | @s.School</span>
+                        <span class="badge">@s.TotalAttendances attendances</span>
+                    </div>
+                }
+            </div>
+        }
+        @if (_destId.HasValue)
+        {
+            <p class="selected-label">Selected: <strong>@_destName</strong></p>
+        }
+    </div>
+</div>
+
+@if (_sourceId.HasValue && _destId.HasValue)
+{
+    <div class="merge-confirm">
+        <p>
+            Merge <strong>@_sourceName</strong> into <strong>@_destName</strong>?
+            All attendance records will be moved and @_sourceName will be deleted.
+        </p>
+        <button class="btn-merge" @onclick="HandleMerge" disabled="@_merging">
+            @(_merging ? "Merging..." : "Confirm Merge")
+        </button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_result))
+{
+    <div class="merge-result">@_result</div>
+}
+
+<style>
+    .merge-layout { display: flex; gap: 1rem; align-items: flex-start; margin: 1rem 0; flex-wrap: wrap; }
+    .merge-side { flex: 1; min-width: 250px; }
+    .merge-arrow { font-size: 2rem; padding-top: 2.5rem; color: #999; }
+    .merge-results { border: 1px solid #ccc; border-radius: 4px; margin-top: 0.3rem; max-height: 250px; overflow-y: auto; }
+    .merge-result-item { padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #eee; display: flex; flex-direction: column; gap: 0.2rem; }
+    .selected-label { margin-top: 0.5rem; }
+    .merge-confirm { margin: 1rem 0; padding: 1rem; background: #fff8e1; border: 1px solid #ffca28; border-radius: 6px; }
+    .btn-merge { padding: 0.5rem 1.5rem; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .merge-result { margin-top: 1rem; padding: 0.5rem; border-radius: 4px; background: #e6ffe6; }
+</style>
+
+@code {
+    private string _sourceSearch = "";
+    private string _destSearch = "";
+    private int? _sourceId;
+    private int? _destId;
+    private string _sourceName = "";
+    private string _destName = "";
+    private bool _merging;
+    private string? _result;
+    private List<StudentResponse> _sourceResults = new();
+    private List<StudentResponse> _destResults = new();
+
+    private async Task SearchSource()
+    {
+        if (string.IsNullOrWhiteSpace(_sourceSearch))
+        { _sourceResults.Clear(); return; }
+        try { _sourceResults = await Api.SearchStudentsAsync(_sourceSearch); }
+        catch { }
+    }
+
+    private async Task SearchDest()
+    {
+        if (string.IsNullOrWhiteSpace(_destSearch))
+        { _destResults.Clear(); return; }
+        try { _destResults = await Api.SearchStudentsAsync(_destSearch); }
+        catch { }
+    }
+
+    private void SelectSource(StudentResponse s)
+    {
+        _sourceId = s.Id;
+        _sourceName = s.FullName;
+        _sourceResults.Clear();
+        _sourceSearch = s.FullName;
+        _result = null;
+    }
+
+    private void SelectDest(StudentResponse s)
+    {
+        _destId = s.Id;
+        _destName = s.FullName;
+        _destResults.Clear();
+        _destSearch = s.FullName;
+        _result = null;
+    }
+
+    private async Task HandleMerge()
+    {
+        if (!_sourceId.HasValue || !_destId.HasValue) return;
+        if (_sourceId.Value == _destId.Value)
+        { _result = "Cannot merge a student into themselves."; return; }
+
+        _merging = true;
+        _result = null;
+        try
+        {
+            var result = await Api.MergeStudentsAsync(new MergeStudentsRequest
+            {
+                SourceStudentId = _sourceId.Value,
+                DestinationStudentId = _destId.Value
+            });
+            if (result != null)
+            {
+                _result = $"✅ Merged {result.AttendancesMoved} attendance(s) from <strong>{result.SourceStudentName}</strong> into <strong>{_destName}</strong>.";
+                _sourceId = null;
+                _sourceSearch = "";
+                _sourceName = "";
+            }
+        }
+        catch (Exception ex) { _result = $"❌ Error: {ex.Message}"; }
+        finally { _merging = false; }
+    }
+}

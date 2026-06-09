@@ -1,0 +1,20 @@
+﻿@inject AuthState Auth
+@inject NavigationManager Nav
+
+<nav class="nav-menu">
+    <NavLink class="nav-link" href="attendance">Record Attendance</NavLink>
+    <NavLink class="nav-link" href="students">Students</NavLink>
+    <NavLink class="nav-link" href="outreach">Outreach</NavLink>
+    <NavLink class="nav-link" href="trends">Trends</NavLink>
+    <NavLink class="nav-link" href="checkin-summary">Check-in Summary</NavLink>
+    <NavLink class="nav-link" href="settings">Settings</NavLink>
+    <a class="nav-link" href="" @onclick="@SignOut" @onclick:preventDefault="true">Sign Out</a>
+</nav>
+
+@code {
+    private async Task SignOut()
+    {
+        await Auth.ClearKeyAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

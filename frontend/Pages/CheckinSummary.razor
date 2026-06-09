@@ -1,0 +1,137 @@
+@page "/checkin-summary"
+@inject ApiService Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h2>Check-in Summary</h2>
+
+<div class="summary-bar">
+    <label>Date: <InputDate @bind-Value="_date" /></label>
+    <button @onclick="LoadData" disabled="@_loading">@(_loading ? "Loading..." : "Refresh")</button>
+    <button @onclick="PrintPage">🖨 Print</button>
+    <button @onclick="DownloadCsv">⬇ Download CSV</button>
+</div>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_students.Count == 0)
+{
+    <p>No attendance recorded for this date.</p>
+}
+else
+{
+    <div class="totals-row">
+        <div class="total-card"><strong>@_students.Count</strong> Total Checked In</div>
+        <div class="total-card"><strong>@_byGrade.Count</strong> Grades Represented</div>
+        <div class="total-card"><strong>@_byEventType.Sum(g => g.Count)</strong> Event Types</div>
+    </div>
+
+    <div class="breakdowns">
+        <div class="breakdown-card">
+            <h4>By Grade</h4>
+            @foreach (var g in _byGrade)
+            {
+                <div class="breakdown-row"><span>@g.Grade</span><span>@g.Count</span></div>
+            }
+        </div>
+        <div class="breakdown-card">
+            <h4>By Event Type</h4>
+            @foreach (var e in _byEventType)
+            {
+                <div class="breakdown-row"><span>@FormatEventType(e.Type)</span><span>@e.Count</span></div>
+            }
+        </div>
+    </div>
+
+    <h3>Student List</h3>
+    <table class="roster">
+        <thead>
+            <tr><th>Name</th><th>Grade</th><th>Gender</th><th>School</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var s in _students)
+            {
+                <tr>
+                    <td>@s.FullName</td>
+                    <td>@GradeHelper.GraduationYearToGrade(s.GraduationYear)</td>
+                    <td>@s.Gender</td>
+                    <td>@s.School</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<style>
+    .summary-bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .totals-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .total-card { flex: 1; min-width: 120px; padding: 1rem; background: #e3f2fd; border-radius: 6px; text-align: center; font-size: 1.1rem; }
+    .breakdowns { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .breakdown-card { flex: 1; min-width: 200px; border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem; }
+    .breakdown-row { display: flex; justify-content: space-between; padding: 0.2rem 0; border-bottom: 1px solid #f0f0f0; }
+    .roster { width: 100%; border-collapse: collapse; }
+    @@media print { .summary-bar button { display: none; } .total-card { border: 1px solid #000; } }
+</style>
+
+@code {
+    private DateTime _date = DateTime.Today;
+    private bool _loading;
+    private List<StudentResponse> _students = new();
+    private List<GradeCount> _byGrade = new();
+    private List<TypeCount> _byEventType = new();
+    private List<AttendanceResponse> _records = new();
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _students = await Api.GetStudentsByDateAsync(_date);
+            _records = await Api.GetAttendanceByDateAsync(_date);
+
+            _byGrade = _students
+                .GroupBy(s => GradeHelper.GraduationYearToGrade(s.GraduationYear))
+                .OrderBy(g => g.Key)
+                .Select(g => new GradeCount { Grade = g.Key, Count = g.Count() })
+                .ToList();
+
+            _byEventType = _records
+                .GroupBy(r => r.EventType)
+                .Select(g => new TypeCount { Type = g.Key, Count = g.Count() })
+                .ToList();
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private async Task DownloadCsv()
+    {
+        try
+        {
+            var csv = await Api.ExportAttendanceCsvAsync(_date);
+            await JS.InvokeVoidAsync("downloadFile", $"attendance-{_date:yyyy-MM-dd}.csv", csv);
+        }
+        catch { }
+    }
+
+    private async Task PrintPage()
+    {
+        await JS.InvokeVoidAsync("print");
+    }
+
+    private static string FormatEventType(string type) => type switch
+    {
+        "RegularYouthGroup" => "Regular Youth Group",
+        "SocialGameNight" => "Social / Game Night",
+        "ServiceProject" => "Service Project",
+        "RetreatCamp" => "Retreat / Camp",
+        _ => type
+    };
+
+    private class GradeCount { public string Grade { get; set; } = ""; public int Count { get; set; } }
+    private class TypeCount { public string Type { get; set; } = ""; public int Count { get; set; } }
+}

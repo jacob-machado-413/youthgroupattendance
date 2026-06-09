@@ -1,0 +1,58 @@
+@page "/login"
+@layout BlankLayout
+@inject AuthState Auth
+@inject ApiService Api
+@inject NavigationManager Nav
+
+<h1>Youth Group Attendance</h1>
+
+<EditForm Model="_model" OnValidSubmit="@HandleLogin">
+    <DataAnnotationsValidator />
+    <div>
+        <label>API Key</label>
+        <InputText @bind-Value="_model.Key" type="password" />
+        <ValidationMessage For="@(() => _model.Key)" />
+    </div>
+    <button type="submit" disabled="@_loading">@(_loading ? "Verifying..." : "Sign In")</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <p class="error">@_error</p>
+}
+
+@code {
+    private LoginModel _model = new();
+    private bool _loading;
+    private string? _error;
+
+    private async Task HandleLogin()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            await Auth.SetKeyAsync(_model.Key);
+            var valid = await Api.ValidateApiKeyAsync();
+            if (valid)
+                Nav.NavigateTo("/attendance");
+            else
+            {
+                await Auth.ClearKeyAsync();
+                _error = "Invalid API key.";
+            }
+        }
+        catch
+        {
+            _error = "Could not connect to the server.";
+            await Auth.ClearKeyAsync();
+        }
+        finally { _loading = false; }
+    }
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Key { get; set; } = string.Empty;
+    }
+}
