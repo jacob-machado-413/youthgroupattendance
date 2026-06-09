@@ -78,7 +78,7 @@ if (dbPath != null && app.Environment.IsDevelopment())
     lifetime.ApplicationStopped.Register(() =>
     {
         Console.WriteLine("Application stopped. Deleting database...");
-        DeleteSqliteDatabase(dbPath, app.Environment.IsDevelopment());
+        //DeleteSqliteDatabase(dbPath, app.Environment.IsDevelopment());
     });
 }
 
