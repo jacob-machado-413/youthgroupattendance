@@ -9,7 +9,9 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped<AuthState>();
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.BaseAddress;
+var apiBaseUrl = !string.IsNullOrEmpty(builder.Configuration["ApiBaseUrl"])
+    ? builder.Configuration["ApiBaseUrl"]
+    : builder.HostEnvironment.BaseAddress;
 builder.Services.AddScoped(sp =>
 {
     var http = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
