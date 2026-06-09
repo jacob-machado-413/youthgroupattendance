@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using YouthGroupAttendance.Api.Authentication;
@@ -60,7 +61,10 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseDefaultFiles();
-    app.UseStaticFiles();
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        ContentTypeProvider = GetBlazorContentTypeProvider()
+    });
 }
 
 app.UseCors("AllowFrontend");
@@ -94,6 +98,15 @@ static void DeleteSqliteDatabase(string dbPath)
         if (File.Exists(path))
             File.Delete(path);
     }
+}
+
+static FileExtensionContentTypeProvider GetBlazorContentTypeProvider()
+{
+    var provider = new FileExtensionContentTypeProvider();
+    provider.Mappings[".wasm"] = "application/wasm";
+    provider.Mappings[".blat"] = "application/octet-stream";
+    provider.Mappings[".pdb"] = "application/octet-stream";
+    return provider;
 }
 
 static string? ParseSqliteDataSource(string? connStr)

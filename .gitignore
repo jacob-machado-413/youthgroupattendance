@@ -25,3 +25,4 @@ backend/YouthGroupAttendance.db-wal
 appsettings.Local.json
 backend/appsettings.Local.json
 **/appsettings.Local.json
+docker-compose.yml
