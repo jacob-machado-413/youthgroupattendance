@@ -103,31 +103,9 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
     // ── Grade to Graduation Year Conversion ───────────────────────────────
 
     [Fact]
-    public async Task GradeConversion_10thGrade_GraduatesIn2028()
+    public async Task GradeConversion_10thGrade_GraduatesIn2029()
     {
         var request = new AttendanceRequest { FullName = "Sophomore", Grade = "10th" };
-        var response = await _client.PostAsJsonAsync("/api/attendance", request);
-        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
-
-        Assert.NotNull(result);
-        Assert.Equal(2028, result.GraduationYear);
-    }
-
-    [Fact]
-    public async Task GradeConversion_12thGrade_GraduatesIn2026()
-    {
-        var request = new AttendanceRequest { FullName = "Senior", Grade = "12th" };
-        var response = await _client.PostAsJsonAsync("/api/attendance", request);
-        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
-
-        Assert.NotNull(result);
-        Assert.Equal(2026, result.GraduationYear);
-    }
-
-    [Fact]
-    public async Task GradeConversion_9thGrade_GraduatesIn2029()
-    {
-        var request = new AttendanceRequest { FullName = "Freshman", Grade = "9" };
         var response = await _client.PostAsJsonAsync("/api/attendance", request);
         var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
 
@@ -136,14 +114,36 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
     }
 
     [Fact]
-    public async Task GradeConversion_8thGrade_GraduatesIn2030()
+    public async Task GradeConversion_12thGrade_GraduatesIn2027()
+    {
+        var request = new AttendanceRequest { FullName = "Senior", Grade = "12th" };
+        var response = await _client.PostAsJsonAsync("/api/attendance", request);
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal(2027, result.GraduationYear);
+    }
+
+    [Fact]
+    public async Task GradeConversion_9thGrade_GraduatesIn2030()
+    {
+        var request = new AttendanceRequest { FullName = "Freshman", Grade = "9" };
+        var response = await _client.PostAsJsonAsync("/api/attendance", request);
+        var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
+
+        Assert.NotNull(result);
+        Assert.Equal(2030, result.GraduationYear);
+    }
+
+    [Fact]
+    public async Task GradeConversion_8thGrade_GraduatesIn2031()
     {
         var request = new AttendanceRequest { FullName = "EighthGrader", Grade = "8th" };
         var response = await _client.PostAsJsonAsync("/api/attendance", request);
         var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
 
         Assert.NotNull(result);
-        Assert.Equal(2030, result.GraduationYear);
+        Assert.Equal(2031, result.GraduationYear);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
         var result = await response.Content.ReadFromJsonAsync<AttendanceResponse>();
 
         Assert.NotNull(result);
-        Assert.Equal(2027, result.GraduationYear);
+        Assert.Equal(2028, result.GraduationYear);
     }
 
     // ── Get Attendance by Date ────────────────────────────────────────────
@@ -217,7 +217,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
 
         var studentA = students.First(s => s.FullName == "Student A");
         Assert.Equal(2, studentA.TotalAttendances);
-        Assert.Equal(2028, studentA.GraduationYear);
+        Assert.Equal(2029, studentA.GraduationYear);
 
         var studentB = students.First(s => s.FullName == "Student B");
         Assert.Equal(1, studentB.TotalAttendances);
@@ -321,7 +321,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
 
         Assert.NotNull(student);
         Assert.Equal("Detail Test", student.FullName);
-        Assert.Equal(2026, student.GraduationYear);
+        Assert.Equal(2027, student.GraduationYear);
         Assert.Single(student.Attendances);
     }
 
@@ -370,8 +370,8 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
         Assert.Equal(3, trends.TotalStudents);
         Assert.Equal(3, trends.TotalAttendances);
 
-        Assert.Contains(trends.GradeBreakdown, g => g.GraduationYear == 2026); // 12th
-        Assert.Contains(trends.GradeBreakdown, g => g.GraduationYear == 2027); // 11th
+        Assert.Contains(trends.GradeBreakdown, g => g.GraduationYear == 2027); // 12th
+        Assert.Contains(trends.GradeBreakdown, g => g.GraduationYear == 2028); // 11th
     }
 
     // ── Attendance by Student ID ──────────────────────────────────────────
@@ -438,7 +438,7 @@ public class AttendanceApiTests : IClassFixture<CustomWebApplicationFactory>, IA
         Assert.NotNull(result);
         Assert.False(result.IsNewStudent);
         // Graduation year should remain the original
-        Assert.Equal(2028, result.GraduationYear);
+        Assert.Equal(2029, result.GraduationYear);
     }
 
     // ── Event Type ───────────────────────────────────────────────────────────

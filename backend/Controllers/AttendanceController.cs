@@ -25,12 +25,20 @@ public class AttendanceController : ControllerBase
         var digits = new string(grade.Where(char.IsDigit).ToArray());
         if (int.TryParse(digits, out var gradeLevel) && gradeLevel >= 1 && gradeLevel <= 12)
         {
-            var currentYear = DateTime.UtcNow.Month >= 9
-                ? DateTime.UtcNow.Year + 1
-                : DateTime.UtcNow.Year;
-            return currentYear + (12 - gradeLevel);
+            var now = DateTime.UtcNow;
+            var cutover = GetAcademicYearCutover(now.Year);
+            var academicYear = now >= cutover ? now.Year + 1 : now.Year;
+            return academicYear + (12 - gradeLevel);
         }
         return DateTime.UtcNow.Year + 1;
+    }
+
+    private static DateTime GetAcademicYearCutover(int year)
+    {
+        var june1 = new DateTime(year, 6, 1);
+        var daysUntilMonday = ((int)DayOfWeek.Monday - (int)june1.DayOfWeek + 7) % 7;
+        var firstMonday = june1.AddDays(daysUntilMonday);
+        return firstMonday.AddDays(6);
     }
 
     private static Models.EventType ParseEventType(string? eventType)
